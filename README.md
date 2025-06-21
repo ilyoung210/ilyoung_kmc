@@ -474,6 +474,7 @@ def total_energy_breakdown(spins, N, T, J):
     """
     시스템 전체 에너지를 절대값으로
     (bulk, field, potts, interface, total) 로 분해 계산.
+    기존 기능을 보존하기 위해 제공.
     """
     sum_bulk = 0.0
     sum_field = 0.0
@@ -502,30 +503,84 @@ def total_energy_breakdown(spins, N, T, J):
     return sum_bulk, sum_field, sum_potts, sum_interface, E_tot
 
 ################################################################################
+# [추가 함수 1b] 세부 에너지 분해 (bulk/helmholtz/surface/field/potts/interface)
+################################################################################
+def total_energy_breakdown_extended(spins, N, T, J):
+    """
+    bulk 항(E_p, E_m, E_t)을 분리하여 Helmholtz(-T*a_i)와
+    surface(sigma_i/(h/5))를 각각 독립적으로 합산.
+    반환값: (bulk_base, helmholtz, surface, field, potts, interface, total)
+    """
+    sum_base = 0.0
+    sum_helm = 0.0
+    sum_surface = 0.0
+    sum_field = 0.0
+    sum_potts = 0.0
+    sum_interface = 0.0
+
+    for x in range(N):
+        for y in range(N):
+            s = spins[x, y]
+            if is_Up(s) or is_Down(s):
+                sum_base += E_p
+                sum_helm += -T * a_1
+                sum_surface += sigma_1 / (h/5)
+            elif is_M(s):
+                sum_base += E_m
+                sum_helm += -T * a_2
+                sum_surface += sigma_2 / (h/5)
+            elif is_T(s):
+                sum_base += E_t
+                sum_helm += -T * a_3
+                sum_surface += sigma_3 / (h/5)
+
+            sum_field += field_energy(s,J)
+
+    for x in range(N):
+        for y in range(N):
+            s = spins[x,y]
+            sr = spins[x,(y+1)%N]
+            sd = spins[(x+1)%N,y]
+            sum_potts     += potts_interaction_energy(s,sr,J)
+            sum_potts     += potts_interaction_energy(s,sd,J)
+            sum_interface += interface_energy(s,sr,J)
+            sum_interface += interface_energy(s,sd,J)
+
+    E_tot = (sum_base + sum_helm + sum_surface +
+             sum_field + sum_potts + sum_interface)
+    return (sum_base, sum_helm, sum_surface,
+            sum_field, sum_potts, sum_interface, E_tot)
+
+################################################################################
 # [추가 함수 2] NEB 에너지 항목별 CSV 기록 위한 함수
 ################################################################################
 def initialize_neb_detail_file(filename='neb_energy_details.csv'):
     """
-    NEB 에너지 항목별 (bulk/field/potts/interface + total) 로그를 위한 CSV 파일 생성.
+    NEB 에너지 항목별 로그 파일을 생성한다.
+    bulk 항(E_p 등)을 분리하여 Helmholtz, surface 에너지까지
+    별도 컬럼으로 기록한다.
     """
     try:
         with open(filename,'w',newline='') as f:
             w=csv.writer(f)
             w.writerow([
                 "step","neb_index","x","y","T(K)","Transition",
-                "Bulk_from","Field_from","Potts_from","Interface_from","E_from",
-                "Bulk_to","Field_to","Potts_to","Interface_to","E_to","E_diff"
+                "BulkBase_from","Helmholtz_from","Surface_from",
+                "Field_from","Potts_from","Interface_from","E_from",
+                "BulkBase_to","Helmholtz_to","Surface_to",
+                "Field_to","Potts_to","Interface_to","E_to","E_diff"
             ])
     except PermissionError:
         print(f"[WARNING] Permission denied for creating {filename}. NEB detail file creation skipped.")
 
 def log_neb_energy_details(step, i, x, y, T_val,
-                           from_label, b_f, f_f, p_f, int_f, E_f,
-                           to_label,   b_t, f_t, p_t, int_t, E_t,
+                           from_label, b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
+                           to_label,   b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
                            filename='neb_energy_details.csv'):
     """
-    NEB 상황에서 from->to (ex: M->T) 전이 시
-    시스템 전체에 대한 절대 에너지( bulk, field, potts, interface, total )를 기록.
+    NEB 상황에서 from->to (예: M->T) 전이 시
+    각 항목별 절대 에너지( bulk base, Helmholtz, surface, field,
+    potts, interface, total )를 기록한다.
     E_diff = E_to - E_from
     """
     try:
@@ -533,8 +588,8 @@ def log_neb_energy_details(step, i, x, y, T_val,
             w = csv.writer(f)
             w.writerow([
                 step, i, x, y, T_val, f"{from_label}->{to_label}",
-                b_f, f_f, p_f, int_f, E_f,
-                b_t, f_t, p_t, int_t, E_t,
+                b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
+                b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
                 (E_t - E_f)
             ])
     except PermissionError:
@@ -952,11 +1007,11 @@ def mode_4_realtime_energy_profile():
                 # M 상태(From)
                 sp_copy= spins.copy()
                 sp_copy[mx,my] = 2  # M
-                bM, fM, pM, iM, eM = total_energy_breakdown(sp_copy,Nsize,T_now,J)
+                b0M, hM, sM, fM, pM, iM, eM = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
 
                 # T 상태(To)
                 sp_copy[mx,my] = 3  # T
-                bT, fT, pT, iT, eT = total_energy_breakdown(sp_copy,Nsize,T_now,J)
+                b0T, hT, sT, fT, pT, iT, eT = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
 
                 dE_J= eT - eM
                 dE_meV= dE_J * J_to_meV
@@ -972,8 +1027,10 @@ def mode_4_realtime_energy_profile():
                 # CSV 기록(M -> T)
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
-                    from_label="M", b_f=bM, f_f=fM, p_f=pM, int_f=iM, E_f=eM,
-                    to_label="T",   b_t=bT, f_t=fT, p_t=pT, int_t=iT, E_t=eT
+                    from_label="M", b0_f=b0M, h_f=hM, s_f=sM, f_f=fM,
+                    p_f=pM, int_f=iM, E_f=eM,
+                    to_label="T",   b0_t=b0T, h_t=hT, s_t=sT, f_t=fT,
+                    p_t=pT, int_t=iT, E_t=eT
                 )
 
                 # Marker color
@@ -1031,11 +1088,11 @@ def mode_4_realtime_energy_profile():
 
                 # M 상태(From)
                 sp_copy[mx,my] = 2
-                bM2, fM2, pM2, iM2, eM2 = total_energy_breakdown(sp_copy,Nsize,T_now,J)
+                b0M2, hM2, sM2, fM2, pM2, iM2, eM2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
 
                 # O 상태(To, Up=0)
                 sp_copy[mx,my] = 0
-                bO2, fO2, pO2, iO2, eO2 = total_energy_breakdown(sp_copy,Nsize,T_now,J)
+                b0O2, hO2, sO2, fO2, pO2, iO2, eO2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
 
                 dE_J2= eO2 - eM2
                 dE_meV2= dE_J2 * J_to_meV
@@ -1051,8 +1108,10 @@ def mode_4_realtime_energy_profile():
                 # CSV 기록(M -> O)
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
-                    from_label="M", b_f=bM2, f_f=fM2, p_f=pM2, int_f=iM2, E_f=eM2,
-                    to_label="O",   b_t=bO2, f_t=fO2, p_t=pO2, int_t=iO2, E_t=eO2
+                    from_label="M", b0_f=b0M2, h_f=hM2, s_f=sM2, f_f=fM2,
+                    p_f=pM2, int_f=iM2, E_f=eM2,
+                    to_label="O",   b0_t=b0O2, h_t=hO2, s_t=sO2, f_t=fO2,
+                    p_t=pO2, int_t=iO2, E_t=eO2
                 )
 
                 # Marker
