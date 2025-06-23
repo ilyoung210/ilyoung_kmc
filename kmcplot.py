@@ -434,6 +434,14 @@ def interaction_energy_details(spins, x, y, state, N, J):
         interface_vals.append(interface_energy(state, s2, J))
     return potts_vals, interface_vals
 
+def local_energy_breakdown(spins, x, y, state, N, T, J):
+    """한 셀(state)의 에너지 분해 값을 계산."""
+    b0, h0, s0 = bulk_energy_components(state, T, h)
+    f0 = field_energy(state, J)
+    potts_vals, interface_vals = interaction_energy_details(spins, x, y, state, N, J)
+    total = b0 + h0 + s0 + f0 + sum(potts_vals) + sum(interface_vals)
+    return b0, h0, s0, f0, sum(potts_vals), sum(interface_vals), total, potts_vals, interface_vals
+
 def interface_energy(s1,s2,J):
     # s1,s2가 다르면 interface_pairs에서 절대값을 불러옴
     if s1==s2:
@@ -584,22 +592,18 @@ def total_energy_breakdown_extended(spins, N, T, J):
 # [추가 함수 2] NEB 에너지 항목별 CSV 기록 위한 함수
 ################################################################################
 def initialize_neb_detail_file(filename='neb_energy_details.csv'):
-    """
-    NEB 에너지 항목별 로그 파일을 생성한다.
-    bulk 항(E_p 등)을 분리하여 Helmholtz, surface 에너지까지
-    별도 컬럼으로 기록한다.
-    """
+    """NEB 에너지 세부 항목 로그용 CSV 초기화."""
     try:
-        with open(filename,'w',newline='') as f:
-            w=csv.writer(f)
+        with open(filename, 'w', newline='') as f:
+            w = csv.writer(f)
             w.writerow([
-                "step","neb_index","x","y","T(K)","Transition",
-                "BulkBase_from","Helmholtz_from","Surface_from",
-                "Field_from","Potts_from","Interface_from","E_from",
-                "BulkBase_to","Helmholtz_to","Surface_to",
-                "Field_to","Potts_to","Interface_to","E_to","E_diff",
-                "BulkTerm_from","FieldTerm_from","PottsTerms_from","InterfaceTerms_from",
-                "BulkTerm_to","FieldTerm_to","PottsTerms_to","InterfaceTerms_to"
+                "step", "neb_index", "x", "y", "T(K)", "Transition",
+                "BulkBase_from", "Helmholtz_from", "Surface_from",
+                "Field_from", "Potts_from", "Interface_from", "E_from",
+                "BulkBase_to", "Helmholtz_to", "Surface_to",
+                "Field_to", "Potts_to", "Interface_to", "E_to", "E_diff",
+                "PottsTerms_from", "InterfaceTerms_from",
+                "PottsTerms_to", "InterfaceTerms_to"
             ])
     except PermissionError:
         print(f"[WARNING] Permission denied for creating {filename}. NEB detail file creation skipped.")
@@ -607,15 +611,10 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
 def log_neb_energy_details(step, i, x, y, T_val,
                            from_label, b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                            to_label,   b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
-                           bulk_term_f, field_term_f, potts_terms_f, int_terms_f,
-                           bulk_term_t, field_term_t, potts_terms_t, int_terms_t,
+                           potts_terms_f, int_terms_f,
+                           potts_terms_t, int_terms_t,
                            filename='neb_energy_details.csv'):
-    """
-    NEB 상황에서 from->to (예: M->T) 전이 시
-    각 항목별 절대 에너지( bulk base, Helmholtz, surface, field,
-    potts, interface, total )를 기록한다.
-    E_diff = E_to - E_from
-    """
+    """전이하는 셀의 항목별 에너지를 기록."""
     try:
         with open(filename, 'a', newline='') as f:
             w = csv.writer(f)
@@ -624,12 +623,8 @@ def log_neb_energy_details(step, i, x, y, T_val,
                 b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                 b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
                 (E_t - E_f),
-                f"{bulk_term_f[0]:.3e},{bulk_term_f[1]:.3e},{bulk_term_f[2]:.3e}",
-                f"{field_term_f:.3e}",
                 ';'.join(f"{v:.3e}" for v in potts_terms_f),
                 ';'.join(f"{v:.3e}" for v in int_terms_f),
-                f"{bulk_term_t[0]:.3e},{bulk_term_t[1]:.3e},{bulk_term_t[2]:.3e}",
-                f"{field_term_t:.3e}",
                 ';'.join(f"{v:.3e}" for v in potts_terms_t),
                 ';'.join(f"{v:.3e}" for v in int_terms_t)
             ])
@@ -1045,14 +1040,11 @@ def mode_4_realtime_energy_profile():
             site = find_m_site_with_Tneighbors(spins, T_need, M_need)
             if site is not None:
                 (mx,my)= site
-                # M 상태(From)
-                sp_copy= spins.copy()
-                sp_copy[mx,my] = 2  # M
-                b0M, hM, sM, fM, pM, iM, eM = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # M 상태(From) - 단일 셀 에너지
+                b0M, hM, sM, fM, pM, iM, eM, potts_f_list, int_f_list = local_energy_breakdown(spins, mx, my, 2, Nsize, T_now, J)
 
-                # T 상태(To)
-                sp_copy[mx,my] = 3  # T
-                b0T, hT, sT, fT, pT, iT, eT = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # T 상태(To) - 단일 셀 에너지
+                b0T, hT, sT, fT, pT, iT, eT, potts_t_list, int_t_list = local_energy_breakdown(spins, mx, my, 3, Nsize, T_now, J)
 
                 dE_J= eT - eM
                 dE_meV= dE_J * J_to_meV
@@ -1066,24 +1058,14 @@ def mode_4_realtime_energy_profile():
                 all_nb1_abs_vals.extend([eM,eT])
 
                 # CSV 기록(M -> T)
-                bulk_f = bulk_energy_components(2, T_now, h)
-                field_f = field_energy(2, J)
-                potts_f, int_f_d = interaction_energy_details(spins, mx, my, 2, Nsize, J)
-
-                bulk_t = bulk_energy_components(3, T_now, h)
-                field_t = field_energy(3, J)
-                potts_t, int_t_d = interaction_energy_details(spins, mx, my, 3, Nsize, J)
-
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
                     from_label="M", b0_f=b0M, h_f=hM, s_f=sM, f_f=fM,
                     p_f=pM, int_f=iM, E_f=eM,
                     to_label="T",   b0_t=b0T, h_t=hT, s_t=sT, f_t=fT,
                     p_t=pT, int_t=iT, E_t=eT,
-                    bulk_term_f=bulk_f, field_term_f=field_f,
-                    potts_terms_f=potts_f, int_terms_f=int_f_d,
-                    bulk_term_t=bulk_t, field_term_t=field_t,
-                    potts_terms_t=potts_t, int_terms_t=int_t_d
+                    potts_terms_f=potts_f_list, int_terms_f=int_f_list,
+                    potts_terms_t=potts_t_list, int_terms_t=int_t_list
                 )
 
                 # Marker color
@@ -1137,15 +1119,11 @@ def mode_4_realtime_energy_profile():
             site= find_m_site_with_Oneighbors(spins,O_need,M_need)
             if site is not None:
                 (mx,my)= site
-                sp_copy= spins.copy()
-
-                # M 상태(From)
-                sp_copy[mx,my] = 2
-                b0M2, hM2, sM2, fM2, pM2, iM2, eM2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # M 상태(From) - 단일 셀 에너지
+                b0M2, hM2, sM2, fM2, pM2, iM2, eM2, potts_f2_list, int_f2_list = local_energy_breakdown(spins, mx, my, 2, Nsize, T_now, J)
 
                 # O 상태(To, Up=0)
-                sp_copy[mx,my] = 0
-                b0O2, hO2, sO2, fO2, pO2, iO2, eO2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                b0O2, hO2, sO2, fO2, pO2, iO2, eO2, potts_t2_list, int_t2_list = local_energy_breakdown(spins, mx, my, 0, Nsize, T_now, J)
 
                 dE_J2= eO2 - eM2
                 dE_meV2= dE_J2 * J_to_meV
@@ -1159,24 +1137,14 @@ def mode_4_realtime_energy_profile():
                 all_nb2_abs_vals.extend([eM2,eO2])
 
                 # CSV 기록(M -> O)
-                bulk_f2 = bulk_energy_components(2, T_now, h)
-                field_f2 = field_energy(2, J)
-                potts_f2, int_f2_d = interaction_energy_details(spins, mx, my, 2, Nsize, J)
-
-                bulk_t2 = bulk_energy_components(0, T_now, h)
-                field_t2 = field_energy(0, J)
-                potts_t2, int_t2_d = interaction_energy_details(spins, mx, my, 0, Nsize, J)
-
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
                     from_label="M", b0_f=b0M2, h_f=hM2, s_f=sM2, f_f=fM2,
                     p_f=pM2, int_f=iM2, E_f=eM2,
                     to_label="O",   b0_t=b0O2, h_t=hO2, s_t=sO2, f_t=fO2,
                     p_t=pO2, int_t=iO2, E_t=eO2,
-                    bulk_term_f=bulk_f2, field_term_f=field_f2,
-                    potts_terms_f=potts_f2, int_terms_f=int_f2_d,
-                    bulk_term_t=bulk_t2, field_term_t=field_t2,
-                    potts_terms_t=potts_t2, int_terms_t=int_t2_d
+                    potts_terms_f=potts_f2_list, int_terms_f=int_f2_list,
+                    potts_terms_t=potts_t2_list, int_terms_t=int_t2_list
                 )
 
                 # Marker

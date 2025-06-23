@@ -405,6 +405,35 @@ def potts_interaction_energy(s1,s2,J):
         return +J
     return 0.0
 
+def bulk_energy_components(s, T, h):
+    """Return (bulk_base, helmholtz, surface) for single spin."""
+    if is_Up(s) or is_Down(s):
+        base, helm, surf = E_p, -T * a_1, sigma_1 / (h/5)
+    elif is_M(s):
+        base, helm, surf = E_m, -T * a_2, sigma_2 / (h/5)
+    elif is_T(s):
+        base, helm, surf = E_t, -T * a_3, sigma_3 / (h/5)
+    else:
+        base = helm = surf = 0.0
+    return base, helm, surf
+
+def interaction_energy_details(spins, x, y, state, N, J):
+    neigh = [((x-1)%N,y), ((x+1)%N,y), (x,(y-1)%N), (x,(y+1)%N)]
+    potts_vals = []
+    interface_vals = []
+    for (xx, yy) in neigh:
+        s2 = spins[xx, yy]
+        potts_vals.append(potts_interaction_energy(state, s2, J))
+        interface_vals.append(interface_energy(state, s2, J))
+    return potts_vals, interface_vals
+
+def local_energy_breakdown(spins, x, y, state, N, T, J):
+    b0, h0, s0 = bulk_energy_components(state, T, h)
+    f0 = field_energy(state, J)
+    potts_vals, interface_vals = interaction_energy_details(spins, x, y, state, N, J)
+    total = b0 + h0 + s0 + f0 + sum(potts_vals) + sum(interface_vals)
+    return b0, h0, s0, f0, sum(potts_vals), sum(interface_vals), total, potts_vals, interface_vals
+
 def interface_energy(s1,s2,J):
     # s1,s2가 다르면 interface_pairs에서 절대값을 불러옴
     if s1==s2:
@@ -555,11 +584,7 @@ def total_energy_breakdown_extended(spins, N, T, J):
 # [추가 함수 2] NEB 에너지 항목별 CSV 기록 위한 함수
 ################################################################################
 def initialize_neb_detail_file(filename='neb_energy_details.csv'):
-    """
-    NEB 에너지 항목별 로그 파일을 생성한다.
-    bulk 항(E_p 등)을 분리하여 Helmholtz, surface 에너지까지
-    별도 컬럼으로 기록한다.
-    """
+    """NEB 에너지 세부 항목 로그용 CSV 초기화."""
     try:
         with open(filename,'w',newline='') as f:
             w=csv.writer(f)
@@ -568,7 +593,9 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
                 "BulkBase_from","Helmholtz_from","Surface_from",
                 "Field_from","Potts_from","Interface_from","E_from",
                 "BulkBase_to","Helmholtz_to","Surface_to",
-                "Field_to","Potts_to","Interface_to","E_to","E_diff"
+                "Field_to","Potts_to","Interface_to","E_to","E_diff",
+                "PottsTerms_from","InterfaceTerms_from",
+                "PottsTerms_to","InterfaceTerms_to"
             ])
     except PermissionError:
         print(f"[WARNING] Permission denied for creating {filename}. NEB detail file creation skipped.")
@@ -576,13 +603,10 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
 def log_neb_energy_details(step, i, x, y, T_val,
                            from_label, b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                            to_label,   b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
+                           potts_terms_f, int_terms_f,
+                           potts_terms_t, int_terms_t,
                            filename='neb_energy_details.csv'):
-    """
-    NEB 상황에서 from->to (예: M->T) 전이 시
-    각 항목별 절대 에너지( bulk base, Helmholtz, surface, field,
-    potts, interface, total )를 기록한다.
-    E_diff = E_to - E_from
-    """
+    """전이 셀의 분해 에너지를 기록."""
     try:
         with open(filename, 'a', newline='') as f:
             w = csv.writer(f)
@@ -590,7 +614,11 @@ def log_neb_energy_details(step, i, x, y, T_val,
                 step, i, x, y, T_val, f"{from_label}->{to_label}",
                 b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                 b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
-                (E_t - E_f)
+                (E_t - E_f),
+                ';'.join(f"{v:.3e}" for v in potts_terms_f),
+                ';'.join(f"{v:.3e}" for v in int_terms_f),
+                ';'.join(f"{v:.3e}" for v in potts_terms_t),
+                ';'.join(f"{v:.3e}" for v in int_terms_t)
             ])
     except PermissionError:
         print(f"[WARNING] Could not write to {filename} (Permission denied). Skipped logging NEB energy details.")
@@ -1004,14 +1032,11 @@ def mode_4_realtime_energy_profile():
             site = find_m_site_with_Tneighbors(spins, T_need, M_need)
             if site is not None:
                 (mx,my)= site
-                # M 상태(From)
-                sp_copy= spins.copy()
-                sp_copy[mx,my] = 2  # M
-                b0M, hM, sM, fM, pM, iM, eM = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # M 상태(From) - 단일 셀
+                b0M, hM, sM, fM, pM, iM, eM, potts_f_list, int_f_list = local_energy_breakdown(spins, mx, my, 2, Nsize, T_now, J)
 
-                # T 상태(To)
-                sp_copy[mx,my] = 3  # T
-                b0T, hT, sT, fT, pT, iT, eT = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # T 상태(To) - 단일 셀
+                b0T, hT, sT, fT, pT, iT, eT, potts_t_list, int_t_list = local_energy_breakdown(spins, mx, my, 3, Nsize, T_now, J)
 
                 dE_J= eT - eM
                 dE_meV= dE_J * J_to_meV
@@ -1030,7 +1055,9 @@ def mode_4_realtime_energy_profile():
                     from_label="M", b0_f=b0M, h_f=hM, s_f=sM, f_f=fM,
                     p_f=pM, int_f=iM, E_f=eM,
                     to_label="T",   b0_t=b0T, h_t=hT, s_t=sT, f_t=fT,
-                    p_t=pT, int_t=iT, E_t=eT
+                    p_t=pT, int_t=iT, E_t=eT,
+                    potts_terms_f=potts_f_list, int_terms_f=int_f_list,
+                    potts_terms_t=potts_t_list, int_terms_t=int_t_list
                 )
 
                 # Marker color
@@ -1087,12 +1114,11 @@ def mode_4_realtime_energy_profile():
                 sp_copy= spins.copy()
 
                 # M 상태(From)
-                sp_copy[mx,my] = 2
-                b0M2, hM2, sM2, fM2, pM2, iM2, eM2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                # M 상태(From) - 단일 셀
+                b0M2, hM2, sM2, fM2, pM2, iM2, eM2, potts_f2_list, int_f2_list = local_energy_breakdown(spins, mx, my, 2, Nsize, T_now, J)
 
                 # O 상태(To, Up=0)
-                sp_copy[mx,my] = 0
-                b0O2, hO2, sO2, fO2, pO2, iO2, eO2 = total_energy_breakdown_extended(sp_copy,Nsize,T_now,J)
+                b0O2, hO2, sO2, fO2, pO2, iO2, eO2, potts_t2_list, int_t2_list = local_energy_breakdown(spins, mx, my, 0, Nsize, T_now, J)
 
                 dE_J2= eO2 - eM2
                 dE_meV2= dE_J2 * J_to_meV
@@ -1111,7 +1137,9 @@ def mode_4_realtime_energy_profile():
                     from_label="M", b0_f=b0M2, h_f=hM2, s_f=sM2, f_f=fM2,
                     p_f=pM2, int_f=iM2, E_f=eM2,
                     to_label="O",   b0_t=b0O2, h_t=hO2, s_t=sO2, f_t=fO2,
-                    p_t=pO2, int_t=iO2, E_t=eO2
+                    p_t=pO2, int_t=iO2, E_t=eO2,
+                    potts_terms_f=potts_f2_list, int_terms_f=int_f2_list,
+                    potts_terms_t=potts_t2_list, int_terms_t=int_t2_list
                 )
 
                 # Marker
