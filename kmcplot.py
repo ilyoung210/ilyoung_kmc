@@ -601,7 +601,8 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
                 "BulkBase_from", "Helmholtz_from", "Surface_from",
                 "Field_from", "Potts_from", "Interface_from", "E_from",
                 "BulkBase_to", "Helmholtz_to", "Surface_to",
-                "Field_to", "Potts_to", "Interface_to", "E_to", "E_diff",
+                "Field_to", "Potts_to", "Interface_to", "E_to",
+                "E_diff", "E_diff_meV",
                 "PottsTerms_from", "InterfaceTerms_from",
                 "PottsTerms_to", "InterfaceTerms_to"
             ])
@@ -611,6 +612,7 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
 def log_neb_energy_details(step, i, x, y, T_val,
                            from_label, b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                            to_label,   b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
+                           dE_meV,
                            potts_terms_f, int_terms_f,
                            potts_terms_t, int_terms_t,
                            filename='neb_energy_details.csv'):
@@ -622,7 +624,7 @@ def log_neb_energy_details(step, i, x, y, T_val,
                 step, i, x, y, T_val, f"{from_label}->{to_label}",
                 b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                 b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
-                (E_t - E_f),
+                (E_t - E_f), dE_meV,
                 ';'.join(f"{v:.3e}" for v in potts_terms_f),
                 ';'.join(f"{v:.3e}" for v in int_terms_f),
                 ';'.join(f"{v:.3e}" for v in potts_terms_t),
@@ -1063,7 +1065,7 @@ def mode_4_realtime_energy_profile():
                     from_label="M", b0_f=b0M, h_f=hM, s_f=sM, f_f=fM,
                     p_f=pM, int_f=iM, E_f=eM,
                     to_label="T",   b0_t=b0T, h_t=hT, s_t=sT, f_t=fT,
-                    p_t=pT, int_t=iT, E_t=eT,
+                    p_t=pT, int_t=iT, E_t=eT, dE_meV=dE_meV,
                     potts_terms_f=potts_f_list, int_terms_f=int_f_list,
                     potts_terms_t=potts_t_list, int_terms_t=int_t_list
                 )
@@ -1142,7 +1144,7 @@ def mode_4_realtime_energy_profile():
                     from_label="M", b0_f=b0M2, h_f=hM2, s_f=sM2, f_f=fM2,
                     p_f=pM2, int_f=iM2, E_f=eM2,
                     to_label="O",   b0_t=b0O2, h_t=hO2, s_t=sO2, f_t=fO2,
-                    p_t=pO2, int_t=iO2, E_t=eO2,
+                    p_t=pO2, int_t=iO2, E_t=eO2, dE_meV=dE_meV2,
                     potts_terms_f=potts_f2_list, int_terms_f=int_f2_list,
                     potts_terms_t=potts_t2_list, int_terms_t=int_t2_list
                 )
