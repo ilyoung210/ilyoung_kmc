@@ -597,19 +597,22 @@ def initialize_neb_detail_file(filename='neb_energy_details.csv'):
         with open(filename, 'w', newline='') as f:
             w = csv.writer(f)
             w.writerow([
-                "step", "neb_index", "x", "y", "T(K)", "Transition",
+                "step", "neb_index", "x", "y", "T(K)",
+                "Env_from", "Env_to", "Transition",
                 "BulkBase_from", "Helmholtz_from", "Surface_from",
                 "Field_from", "Potts_from", "Interface_from", "E_from",
                 "BulkBase_to", "Helmholtz_to", "Surface_to",
                 "Field_to", "Potts_to", "Interface_to", "E_to",
-                "E_diff", "E_diff_meV",
-                "PottsTerms_from", "InterfaceTerms_from",
+                "BulkBase_diff", "Helmholtz_diff", "Surface_diff",
+                "Field_diff", "Potts_diff", "Interface_diff", "E_diff",
+                "E_diff_meV", "PottsTerms_from", "InterfaceTerms_from",
                 "PottsTerms_to", "InterfaceTerms_to"
             ])
     except PermissionError:
         print(f"[WARNING] Permission denied for creating {filename}. NEB detail file creation skipped.")
 
 def log_neb_energy_details(step, i, x, y, T_val,
+                           env_from, env_to,
                            from_label, b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                            to_label,   b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
                            dE_meV,
@@ -621,9 +624,13 @@ def log_neb_energy_details(step, i, x, y, T_val,
         with open(filename, 'a', newline='') as f:
             w = csv.writer(f)
             w.writerow([
-                step, i, x, y, T_val, f"{from_label}->{to_label}",
+                step, i, x, y, T_val,
+                env_from, env_to,
+                f"{from_label}->{to_label}",
                 b0_f, h_f, s_f, f_f, p_f, int_f, E_f,
                 b0_t, h_t, s_t, f_t, p_t, int_t, E_t,
+                (b0_t - b0_f), (h_t - h_f), (s_t - s_f),
+                (f_t - f_f), (p_t - p_f), (int_t - int_f),
                 (E_t - E_f), dE_meV,
                 ';'.join(f"{v:.3e}" for v in potts_terms_f),
                 ';'.join(f"{v:.3e}" for v in int_terms_f),
@@ -1059,9 +1066,13 @@ def mode_4_realtime_energy_profile():
                 line_nb1_abs[i].set_data([0,1],[eM,eT])
                 all_nb1_abs_vals.extend([eM,eT])
 
+                env_from = f"M{M_need}T{T_need}"
+                env_to   = f"M{max(M_need-1,0)}T{T_need+1}"
+
                 # CSV 기록(M -> T)
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
+                    env_from=env_from, env_to=env_to,
                     from_label="M", b0_f=b0M, h_f=hM, s_f=sM, f_f=fM,
                     p_f=pM, int_f=iM, E_f=eM,
                     to_label="T",   b0_t=b0T, h_t=hT, s_t=sT, f_t=fT,
@@ -1138,9 +1149,13 @@ def mode_4_realtime_energy_profile():
                 line_nb2_abs[i].set_data([0,1],[eM2,eO2])
                 all_nb2_abs_vals.extend([eM2,eO2])
 
+                env_from2 = f"M{M_need}O{O_need}"
+                env_to2   = f"M{max(M_need-1,0)}O{O_need+1}"
+
                 # CSV 기록(M -> O)
                 log_neb_energy_details(
                     step=frame, i=i, x=mx, y=my, T_val=T_now,
+                    env_from=env_from2, env_to=env_to2,
                     from_label="M", b0_f=b0M2, h_f=hM2, s_f=sM2, f_f=fM2,
                     p_f=pM2, int_f=iM2, E_f=eM2,
                     to_label="O",   b0_t=b0O2, h_t=hO2, s_t=sO2, f_t=fO2,
