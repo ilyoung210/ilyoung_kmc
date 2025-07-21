@@ -1542,7 +1542,7 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     orientation_vertical = Nx >= Ny
     base = 4.0
-    ratio_limit = 5.0
+    ratio_limit = 20.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
     wfac = min(ratio_limit, max(1.0, ratio))
     hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
@@ -1604,7 +1604,7 @@ def create_heatmap_pdf_for_seeds(Nx, Ny, segments, seeds, labels, filename):
     run_snaps = [simulate_single_run_record(Nx, Ny, segments, sd) for sd in seeds]
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
-    ratio_limit = 5.0
+    ratio_limit = 20.0
     wfac = min(ratio_limit, max(1.0, ratio))
     hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
     base = 4.0
@@ -1776,7 +1776,7 @@ def run_scatter_mode(
         ar = Ny / float(Nx) if Nx > 0 else 1.0
         orientation_vertical = Nx >= Ny
         base = 4.0
-        ratio_limit = 5.0
+        ratio_limit = 20.0
         ratio = Nx / float(Ny) if Ny > 0 else 1.0
         wfac = min(ratio_limit, max(1.0, ratio))
         hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
@@ -1961,16 +1961,36 @@ def run_scatter_mode(
         idx_high = int(order[-1])
         idx_low = int(order[0])
         idx_mid = int(order[len(order)//2])
-        seeds = [seed_list[idx_high], seed_list[idx_low], seed_list[idx_mid]]
-        labels = ["O max", "O min", "O mid"]
+
+        # GIFs for each extreme case
         create_heatmap_gif_for_seeds(
             Nx,
             Ny,
             segments,
-            seeds,
-            'O_phase_extremes.gif',
-            labels,
+            [seed_list[idx_high]],
+            'O_phase_max.gif',
+            ['O max'],
         )
+        create_heatmap_gif_for_seeds(
+            Nx,
+            Ny,
+            segments,
+            [seed_list[idx_mid]],
+            'O_phase_mid.gif',
+            ['O mid'],
+        )
+        create_heatmap_gif_for_seeds(
+            Nx,
+            Ny,
+            segments,
+            [seed_list[idx_low]],
+            'O_phase_min.gif',
+            ['O min'],
+        )
+
+        # PDF with three pages: max, mid, min
+        seeds = [seed_list[idx_high], seed_list[idx_mid], seed_list[idx_low]]
+        labels = ["O max", "O mid", "O min"]
         create_heatmap_pdf_for_seeds(
             Nx,
             Ny,
