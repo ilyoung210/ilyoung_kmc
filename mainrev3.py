@@ -1596,6 +1596,26 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
     except Exception as e:
         print("GIF save error:", e)
     plt.close(fig)
+
+def create_heatmap_pdf_for_seeds(Nx, Ny, segments, seeds, labels, filename):
+    """Create a PDF with final heatmaps for given seeds."""
+    if not seeds:
+        return
+    run_snaps = [simulate_single_run_record(Nx, Ny, segments, sd) for sd in seeds]
+    ar = Ny / float(Nx) if Nx > 0 else 1.0
+    ratio = Nx / float(Ny) if Ny > 0 else 1.0
+    ratio_limit = 5.0
+    wfac = min(ratio_limit, max(1.0, ratio))
+    hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
+    base = 4.0
+    with PdfPages(filename) as pdf:
+        for snap, lbl in zip(run_snaps, labels):
+            fig, ax = plt.subplots(figsize=(base * wfac, base * hfac))
+            ax.imshow(snap[-1].T, cmap=BFS_CMAP, vmin=0, vmax=q - 1, aspect=ar)
+            ax.axis("off")
+            ax.set_title(lbl, fontsize=8)
+            pdf.savefig(fig, bbox_inches="tight")
+            plt.close(fig)
 ################################################################################
 def run_scatter_mode(
     Nx,
@@ -1764,12 +1784,8 @@ def run_scatter_mode(
 
         for start in range(0, len(indices), per_page):
             subset = indices[start:start + per_page]
-            if orientation_vertical:
-                rows = len(subset)
-                cols = 1
-            else:
-                cols = len(subset)
-                rows = 1
+            rows = 1
+            cols = 1
 
             fig, axes = plt.subplots(
                 rows,
@@ -1954,6 +1970,14 @@ def run_scatter_mode(
             seeds,
             'O_phase_extremes.gif',
             labels,
+        )
+        create_heatmap_pdf_for_seeds(
+            Nx,
+            Ny,
+            segments,
+            seeds,
+            labels,
+            os.path.join('O_phase', 'extremes.pdf'),
         )
 
 def create_auto_scatter_script(
