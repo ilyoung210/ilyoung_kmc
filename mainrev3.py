@@ -1529,35 +1529,35 @@ def simulate_single_run_record(Nx, Ny, segments, seed):
     return snaps
 
 def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
-    """Create GIF showing heatmaps for given seeds side by side."""
+    """Create GIF showing heatmaps for given seeds.
+
+    The lattice is transposed so that Nx corresponds to the horizontal axis.
+    Figure size adapts to the rectangle aspect to fill each page correctly.
+    """
     if not seeds:
         return
     run_snaps = [simulate_single_run_record(Nx, Ny, segments, sd) for sd in seeds]
     steps = len(run_snaps[0])
-    # aspect ratio for plotting (height/width)
-    ar = Nx / float(Ny) if Ny > 0 else 1.0
-    orientation_vertical = Nx > Ny
+    # aspect ratio = height / width with Nx as horizontal length
+    ar = Ny / float(Nx) if Nx > 0 else 1.0
+    orientation_vertical = Nx >= Ny
+    base = 4.0
+    wfac = max(1.0, math.sqrt(1.0 / ar))
+    hfac = max(1.0, math.sqrt(ar))
     if orientation_vertical:
         rows = len(seeds)
         cols = 1
     else:
         cols = len(seeds)
         rows = 1
-    base = 4.0
-    ratio_limit = 3.0
-    if orientation_vertical:
-        ratio = min(ar, ratio_limit)
-        figsize = (base, rows * base * ratio)
-    else:
-        ratio = min(1.0 / ar if ar != 0 else 1.0, ratio_limit)
-        figsize = (cols * base * ratio, base)
-    fig, axes = plt.subplots(rows, cols, figsize=figsize)
+    fig, axes = plt.subplots(rows, cols,
+                             figsize=(cols * base * wfac, rows * base * hfac))
     axes = np.atleast_1d(axes)
     ims = []
     temp_texts = []
     for ax, snap, lbl in zip(axes, run_snaps, labels):
         im = ax.imshow(
-            snap[0],
+            snap[0].T,
             cmap=BFS_CMAP,
             vmin=0,
             vmax=q - 1,
@@ -1574,7 +1574,7 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
 
     def init():
         for im, snap, txt in zip(ims, run_snaps, temp_texts):
-            im.set_data(snap[0])
+            im.set_data(snap[0].T)
             txt.set_text(f"T={T_func_profile(segments,0):.1f}K")
         return ims + temp_texts
 
@@ -1582,7 +1582,7 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
         T_now = T_func_profile(segments, frame)
         for im, snap, ax, lbl, txt in zip(ims, run_snaps, axes, labels, temp_texts):
             if frame < len(snap):
-                im.set_data(snap[frame])
+                im.set_data(snap[frame].T)
             ax.set_title(lbl, fontsize=6)
             txt.set_text(f"T={T_now:.1f}K")
         return ims + temp_texts
@@ -1751,10 +1751,11 @@ def run_scatter_mode(
             return []
 
         figs = []
-        ar = Nx / float(Ny) if Ny > 0 else 1.0
-        orientation_vertical = Nx > Ny
+        ar = Ny / float(Nx) if Nx > 0 else 1.0
+        orientation_vertical = Nx >= Ny
         base = 4.0
-        ratio_limit = 3.0
+        wfac = max(1.0, math.sqrt(1.0 / ar))
+        hfac = max(1.0, math.sqrt(ar))
         per_page = 1
 
         for start in range(0, len(indices), per_page):
@@ -1762,21 +1763,21 @@ def run_scatter_mode(
             if orientation_vertical:
                 rows = len(subset)
                 cols = 1
-                ratio = min(ar, ratio_limit)
-                figsize = (base, rows * base * ratio)
             else:
                 cols = len(subset)
                 rows = 1
-                ratio = min(1.0 / ar if ar != 0 else 1.0, ratio_limit)
-                figsize = (cols * base * ratio, base)
 
-            fig, axes = plt.subplots(rows, cols, figsize=figsize)
+            fig, axes = plt.subplots(
+                rows,
+                cols,
+                figsize=(cols * base * wfac, rows * base * hfac),
+            )
             axes = np.atleast_1d(axes).ravel()
 
             for i, idx in enumerate(subset):
                 ax = axes[i]
                 ax.imshow(
-                    snap_list[idx],
+                    snap_list[idx].T,
                     cmap=BFS_CMAP,
                     vmin=0,
                     vmax=q - 1,
@@ -1882,10 +1883,37 @@ def run_scatter_mode(
         fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
         plt.close(fig)
 
+    def save_grain_hist_stack(O_data, M_data, T_data, fname, title):
+        fig, ax = plt.subplots(figsize=PDF_FIG_SIZE)
+        if O_data or M_data or T_data:
+            counts_O, _ = np.histogram(O_data, bins=bins_r)
+            counts_M, _ = np.histogram(M_data, bins=bins_r)
+            counts_T, _ = np.histogram(T_data, bins=bins_r)
+            width = np.diff(bins_r)
+            left = bins_r[:-1]
+            ax.bar(left, counts_O, width=width, color=COLOR_UP, align='edge', label='O')
+            ax.bar(left, counts_M, width=width, bottom=counts_O, color=COLOR_MONO, align='edge', label='M')
+            bottom_TM = counts_O + counts_M
+            ax.bar(left, counts_T, width=width, bottom=bottom_TM, color=COLOR_TETRA, align='edge', label='T')
+            total_counts = counts_O + counts_M + counts_T
+            if total_counts.any():
+                mean_all = np.average((left + width/2), weights=total_counts)
+                ax.axvline(mean_all, color='r', linestyle='--', label=f"Mean={mean_all:.2f}Å")
+            ax.set_xlim(0, max_r * 1.05)
+            ax.legend(fontsize=PDF_LEGEND_FONT_SIZE)
+        ax.set_xlabel('Radius(Å)', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.set_ylabel('Count', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.tick_params(axis='both', labelsize=PDF_TICK_FONT_SIZE)
+        ax.set_title(title, fontsize=PDF_LABEL_FONT_SIZE)
+        fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
+        plt.close(fig)
+
     save_grain_hist(grain_O, 'O_grain_histogram.pdf', 'O Phase Grain Size')
     save_grain_hist(grain_T, 'T_grain_histogram.pdf', 'T Phase Grain Size')
     save_grain_hist(grain_M, 'M_grain_histogram.pdf', 'M Phase Grain Size')
-    save_grain_hist(grain_all, 'All_grain_histogram.pdf', 'All Phases Grain Size')
+    save_grain_hist_stack(grain_O, grain_M, grain_T,
+                          'All_grain_histogram.pdf',
+                          'All Phases Grain Size')
 
     # ---- Thickness distribution histogram ----
     os.makedirs("count", exist_ok=True)
