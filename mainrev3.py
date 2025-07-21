@@ -1542,14 +1542,13 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     orientation_vertical = Nx >= Ny
     base = 4.0
-    ratio_limit = 20.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
     if ratio >= 1:
-        wfac = min(ratio_limit, ratio)
+        wfac = ratio
         hfac = 1.0
     else:
         wfac = 1.0
-        hfac = min(ratio_limit, 1.0 / ratio)
+        hfac = 1.0 / ratio
     if orientation_vertical:
         rows = len(seeds)
         cols = 1
@@ -1608,13 +1607,12 @@ def create_heatmap_pdf_for_seeds(Nx, Ny, segments, seeds, labels, filename):
     run_snaps = [simulate_single_run_record(Nx, Ny, segments, sd) for sd in seeds]
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
-    ratio_limit = 20.0
     if ratio >= 1:
-        wfac = min(ratio_limit, ratio)
+        wfac = ratio
         hfac = 1.0
     else:
         wfac = 1.0
-        hfac = min(ratio_limit, 1.0 / ratio)
+        hfac = 1.0 / ratio
     base = 4.0
     with PdfPages(filename) as pdf:
         for snap, lbl in zip(run_snaps, labels):
@@ -1790,14 +1788,13 @@ def run_scatter_mode(
         ar = Ny / float(Nx) if Nx > 0 else 1.0
         orientation_vertical = Nx >= Ny
         base = 4.0
-        ratio_limit = 20.0
         ratio = Nx / float(Ny) if Ny > 0 else 1.0
         if ratio >= 1:
-            wfac = min(ratio_limit, ratio)
+            wfac = ratio
             hfac = 1.0
         else:
             wfac = 1.0
-            hfac = min(ratio_limit, 1.0 / ratio)
+            hfac = 1.0 / ratio
         per_page = 1
 
         for start in range(0, len(indices), per_page):
@@ -1973,49 +1970,73 @@ def run_scatter_mode(
         for i, hv in enumerate(h_list):
             w.writerow([i, hv])
 
-    # --- create GIF for runs with highest, lowest and middle O fraction ---
+    # --- create GIFs and PDF for runs grouped by O fraction extremes ---
     if O_list:
         order = np.argsort(O_list)
-        idx_high = int(order[-1])
-        idx_low = int(order[0])
-        idx_mid = int(order[len(order)//2])
+        n = len(O_list)
+        n10 = max(1, n // 10)
+        idx_high = order[-n10:]
+        idx_low = order[:n10]
+        mid_start = max(0, n // 2 - n10 // 2)
+        idx_mid = order[mid_start:mid_start + n10]
 
-        # GIFs for each extreme case
+        def make_labels(indices):
+            return [
+                f"run {i} (h={h_list[i]:.1f} nm) "
+                f"O={O_list[i]*100:.1f}% M={M_list[i]*100:.1f}% T={T_list[i]*100:.1f}%"
+                for i in indices
+            ]
+
+        # GIFs for each group
         create_heatmap_gif_for_seeds(
             Nx,
             Ny,
             segments,
-            [seed_list[idx_high]],
+            [seed_list[i] for i in idx_high],
             'O_phase_max.gif',
-            ['O max'],
+            make_labels(idx_high),
         )
         create_heatmap_gif_for_seeds(
             Nx,
             Ny,
             segments,
-            [seed_list[idx_mid]],
+            [seed_list[i] for i in idx_mid],
             'O_phase_mid.gif',
-            ['O mid'],
+            make_labels(idx_mid),
         )
         create_heatmap_gif_for_seeds(
             Nx,
             Ny,
             segments,
-            [seed_list[idx_low]],
+            [seed_list[i] for i in idx_low],
             'O_phase_min.gif',
-            ['O min'],
+            make_labels(idx_low),
         )
 
-        # PDF with three pages: max, mid, min
-        seeds = [seed_list[idx_high], seed_list[idx_mid], seed_list[idx_low]]
-        labels = ["O max", "O mid", "O min"]
+        # Combined PDF for the same groups
         create_heatmap_pdf_for_seeds(
             Nx,
             Ny,
             segments,
-            seeds,
-            labels,
-            os.path.join('O_phase', 'extremes.pdf'),
+            [seed_list[i] for i in idx_high],
+            make_labels(idx_high),
+            os.path.join('O_phase', 'O_phase_max.pdf'),
+        )
+        create_heatmap_pdf_for_seeds(
+            Nx,
+            Ny,
+            segments,
+            [seed_list[i] for i in idx_mid],
+            make_labels(idx_mid),
+            os.path.join('O_phase', 'O_phase_mid.pdf'),
+        )
+        create_heatmap_pdf_for_seeds(
+            Nx,
+            Ny,
+            segments,
+            [seed_list[i] for i in idx_low],
+            make_labels(idx_low),
+            os.path.join('O_phase', 'O_phase_min.pdf'),
         )
 
 def create_auto_scatter_script(
