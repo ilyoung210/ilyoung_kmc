@@ -1542,8 +1542,10 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     orientation_vertical = Nx >= Ny
     base = 4.0
-    wfac = max(1.0, math.sqrt(1.0 / ar))
-    hfac = max(1.0, math.sqrt(ar))
+    ratio_limit = 5.0
+    ratio = Nx / float(Ny) if Ny > 0 else 1.0
+    wfac = min(ratio_limit, max(1.0, ratio))
+    hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
     if orientation_vertical:
         rows = len(seeds)
         cols = 1
@@ -1754,8 +1756,10 @@ def run_scatter_mode(
         ar = Ny / float(Nx) if Nx > 0 else 1.0
         orientation_vertical = Nx >= Ny
         base = 4.0
-        wfac = max(1.0, math.sqrt(1.0 / ar))
-        hfac = max(1.0, math.sqrt(ar))
+        ratio_limit = 5.0
+        ratio = Nx / float(Ny) if Ny > 0 else 1.0
+        wfac = min(ratio_limit, max(1.0, ratio))
+        hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
         per_page = 1
 
         for start in range(0, len(indices), per_page):
