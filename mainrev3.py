@@ -1856,21 +1856,21 @@ def run_scatter_mode(
 
     fig_O_low_list = plot_heatmaps(low_O, 'Low O fraction (bottom 10%)')
     if fig_O_low_list:
-        with PdfPages(os.path.join('O_phase', 'low.pdf')) as pdf:
+        with PdfPages(os.path.join('O_phase', 'O_phase_min.pdf')) as pdf:
             for fg in fig_O_low_list:
                 pdf.savefig(fg, bbox_inches='tight')
                 plt.close(fg)
 
     fig_O_mid_list = plot_heatmaps(mid_O, 'Middle 10% O fraction')
     if fig_O_mid_list:
-        with PdfPages(os.path.join('O_phase', 'mid.pdf')) as pdf:
+        with PdfPages(os.path.join('O_phase', 'O_phase_mid.pdf')) as pdf:
             for fg in fig_O_mid_list:
                 pdf.savefig(fg, bbox_inches='tight')
                 plt.close(fg)
 
     fig_O_high_list = plot_heatmaps(high_O, 'High O fraction (top 10%)')
     if fig_O_high_list:
-        with PdfPages(os.path.join('O_phase', 'high.pdf')) as pdf:
+        with PdfPages(os.path.join('O_phase', 'O_phase_max.pdf')) as pdf:
             for fg in fig_O_high_list:
                 pdf.savefig(fg, bbox_inches='tight')
                 plt.close(fg)
