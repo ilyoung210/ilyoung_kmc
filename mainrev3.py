@@ -571,7 +571,7 @@ def analyze_grains_simple(spin_arr, title_prefix=""):
     global_max= max(radius_all) if radius_all else 1.0
 
     fig_heat, ax_heat= plt.subplots(figsize=PDF_FIG_SIZE)
-    ax_heat.imshow(spin_arr, cmap=BFS_CMAP, origin='upper', vmin=0, vmax=3)
+    ax_heat.imshow(spin_arr, cmap=BFS_CMAP, origin='upper', vmin=0, vmax=3, aspect='equal')
     ax_heat.axis('off')
     if title_prefix:
         ax_heat.set_title(f"{title_prefix} Heatmap + BFS", fontsize=PDF_LABEL_FONT_SIZE)
@@ -624,7 +624,7 @@ def analyze_grains_with_markers(spin_arr, step_label=""):
     global_max= max(radius_all) if radius_all else 1.0
 
     fig_heat, ax_heat= plt.subplots(figsize=PDF_FIG_SIZE)
-    ax_heat.imshow(spin_arr, cmap=BFS_CMAP, origin='upper', vmin=0, vmax=3)
+    ax_heat.imshow(spin_arr, cmap=BFS_CMAP, origin='upper', vmin=0, vmax=3, aspect='equal')
     ax_heat.axis('off')
     if step_label:
         ax_heat.set_title(f"Step={step_label} BFS Heatmap", fontsize=PDF_LABEL_FONT_SIZE)
@@ -781,7 +781,7 @@ def plot_mixed_bfs_overlay(final_label,
                            scale_factor=50.0):
     Nx, Ny = final_label.shape
     fig, ax = plt.subplots(figsize=PDF_FIG_SIZE)
-    ax.imshow(np.ones((Nx, Ny, 3)), origin='upper', vmin=0, vmax=1)
+    ax.imshow(np.ones((Nx, Ny, 3)), origin='upper', vmin=0, vmax=1, aspect='equal')
     if step_label:
         ax.set_title(f"Step={step_label} MixedBFS Voronoi", fontsize=PDF_LABEL_FONT_SIZE)
     else:
@@ -804,7 +804,7 @@ def plot_mixed_bfs_overlay(final_label,
             cval= color_map.get(spin_s, (1,1,1,1))
             overlay_rgb[x,y]= cval[:3]
 
-    ax.imshow(overlay_rgb, origin='upper')
+    ax.imshow(overlay_rgb, origin='upper', aspect='equal')
 
     for sid in unique_ids:
         mask= (final_label==sid)
@@ -1133,7 +1133,7 @@ def run_profile_simulation_offline(segments,
     ax_pol=  axs_off[1][0]
     ax_ph=   axs_off[1][1]
 
-    im_off= ax_spin.imshow(spin_snapshots[0], cmap=BFS_CMAP, vmin=0, vmax=q-1)
+    im_off= ax_spin.imshow(spin_snapshots[0], cmap=BFS_CMAP, vmin=0, vmax=q-1, aspect='equal')
     ax_spin.axis('off')
     legend_e= [
         Patch(facecolor=COLOR_TETRA, label=PHASE_LABEL_TETRA),
@@ -1356,7 +1356,7 @@ def run_profile_simulation_offline(segments,
             # (1) Raw Heatmap
             ################################################################
             fig_raw_fin= plt.figure(figsize=PDF_FIG_SIZE)
-            plt.imshow(final_snap, cmap=BFS_CMAP, vmin=0, vmax=q-1)
+            plt.imshow(final_snap, cmap=BFS_CMAP, vmin=0, vmax=q-1, aspect='equal')
             plt.title(f"Final Step={final_step} Raw Heatmap", fontsize=PDF_LABEL_FONT_SIZE)
             plt.axis('off')
             pdf.savefig(fig_raw_fin, bbox_inches='tight')
@@ -1452,7 +1452,7 @@ def run_profile_simulation_offline(segments,
                         if 0<=stv< len(spin_snapshots):
                             snap_st= spin_snapshots[stv]
                             fig_raw_st= plt.figure(figsize=PDF_FIG_SIZE)
-                            plt.imshow(snap_st, cmap=BFS_CMAP, vmin=0, vmax=q-1)
+                            plt.imshow(snap_st, cmap=BFS_CMAP, vmin=0, vmax=q-1, aspect='equal')
                             plt.title(f"Step={stv} Raw Heatmap", fontsize=PDF_LABEL_FONT_SIZE)
                             plt.axis('off')
                             pdf.savefig(fig_raw_st, bbox_inches='tight')
@@ -1544,8 +1544,12 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
     base = 4.0
     ratio_limit = 20.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
-    wfac = min(ratio_limit, max(1.0, ratio))
-    hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
+    if ratio >= 1:
+        wfac = min(ratio_limit, ratio)
+        hfac = 1.0
+    else:
+        wfac = 1.0
+        hfac = min(ratio_limit, 1.0 / ratio)
     if orientation_vertical:
         rows = len(seeds)
         cols = 1
@@ -1564,7 +1568,7 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
             vmin=0,
             vmax=q - 1,
             animated=True,
-            aspect=ar,
+            aspect='equal',
         )
         ax.axis('off')
         ax.set_title(lbl, fontsize=6)
@@ -1605,13 +1609,23 @@ def create_heatmap_pdf_for_seeds(Nx, Ny, segments, seeds, labels, filename):
     ar = Ny / float(Nx) if Nx > 0 else 1.0
     ratio = Nx / float(Ny) if Ny > 0 else 1.0
     ratio_limit = 20.0
-    wfac = min(ratio_limit, max(1.0, ratio))
-    hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
+    if ratio >= 1:
+        wfac = min(ratio_limit, ratio)
+        hfac = 1.0
+    else:
+        wfac = 1.0
+        hfac = min(ratio_limit, 1.0 / ratio)
     base = 4.0
     with PdfPages(filename) as pdf:
         for snap, lbl in zip(run_snaps, labels):
             fig, ax = plt.subplots(figsize=(base * wfac, base * hfac))
-            ax.imshow(snap[-1].T, cmap=BFS_CMAP, vmin=0, vmax=q - 1, aspect=ar)
+            ax.imshow(
+                snap[-1].T,
+                cmap=BFS_CMAP,
+                vmin=0,
+                vmax=q - 1,
+                aspect='equal',
+            )
             ax.axis("off")
             ax.set_title(lbl, fontsize=8)
             pdf.savefig(fig, bbox_inches="tight")
@@ -1778,8 +1792,12 @@ def run_scatter_mode(
         base = 4.0
         ratio_limit = 20.0
         ratio = Nx / float(Ny) if Ny > 0 else 1.0
-        wfac = min(ratio_limit, max(1.0, ratio))
-        hfac = min(ratio_limit, max(1.0, 1.0 / ratio))
+        if ratio >= 1:
+            wfac = min(ratio_limit, ratio)
+            hfac = 1.0
+        else:
+            wfac = 1.0
+            hfac = min(ratio_limit, 1.0 / ratio)
         per_page = 1
 
         for start in range(0, len(indices), per_page):
@@ -1801,7 +1819,7 @@ def run_scatter_mode(
                     cmap=BFS_CMAP,
                     vmin=0,
                     vmax=q - 1,
-                    aspect=ar,
+                    aspect='equal',
                 )
                 ax.axis("off")
                 ax.set_title(
@@ -2492,7 +2510,7 @@ def main():
         ax_pol=  axs[1][0]
         ax_ph=   axs[1][1]
 
-        im= ax_spin.imshow(spins, cmap=BFS_CMAP, vmin=0, vmax=3)
+        im= ax_spin.imshow(spins, cmap=BFS_CMAP, vmin=0, vmax=3, aspect='equal')
         ax_spin.axis('off')
         legend_e= [
             Patch(facecolor=COLOR_TETRA, label=PHASE_LABEL_TETRA),
@@ -2645,7 +2663,7 @@ def main():
         ax_pol=  axs[1][0]
         ax_ph=   axs[1][1]
 
-        im= ax_spin.imshow(spins, cmap=BFS_CMAP, vmin=0, vmax=q-1)
+        im= ax_spin.imshow(spins, cmap=BFS_CMAP, vmin=0, vmax=q-1, aspect='equal')
         ax_spin.axis('off')
         legend_e= [
             Patch(facecolor=COLOR_TETRA, label=PHASE_LABEL_TETRA),
