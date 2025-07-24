@@ -1570,9 +1570,9 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
             aspect='equal',
         )
         ax.axis('off')
-        ax.set_title(lbl, fontsize=6)
+        ax.set_title(lbl, fontsize=12)
         txt = ax.text(0.02, 0.95, '', transform=ax.transAxes,
-                      ha='left', va='top', color='white', fontsize=6,
+                      ha='left', va='top', color='white', fontsize=10,
                       bbox=dict(facecolor='black', alpha=0.5))
         ims.append(im)
         temp_texts.append(txt)
@@ -1588,7 +1588,7 @@ def create_heatmap_gif_for_seeds(Nx, Ny, segments, seeds, filename, labels):
         for im, snap, ax, lbl, txt in zip(ims, run_snaps, axes, labels, temp_texts):
             if frame < len(snap):
                 im.set_data(snap[frame].T)
-            ax.set_title(lbl, fontsize=6)
+            ax.set_title(lbl, fontsize=12)
             txt.set_text(f"T={T_now:.1f}K")
         return ims + temp_texts
 
@@ -1625,7 +1625,7 @@ def create_heatmap_pdf_for_seeds(Nx, Ny, segments, seeds, labels, filename):
                 aspect='equal',
             )
             ax.axis("off")
-            ax.set_title(lbl, fontsize=8)
+            ax.set_title(lbl, fontsize=12)
             pdf.savefig(fig, bbox_inches="tight")
             plt.close(fig)
 ################################################################################
@@ -1822,7 +1822,7 @@ def run_scatter_mode(
                 ax.set_title(
                     f"run {idx} (h={h_list[idx]:.1f} nm) "
                     f"O={O_list[idx]*100:.1f}% M={M_list[idx]*100:.1f}% T={T_list[idx]*100:.1f}%",
-                    fontsize=6,
+                    fontsize=12,
                 )
             for j in range(len(subset), len(axes)):
                 axes[j].axis("off")
