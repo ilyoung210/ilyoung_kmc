@@ -1980,6 +1980,11 @@ def run_scatter_mode(
         mid_start = max(0, n // 2 - n10 // 2)
         idx_mid = order[mid_start:mid_start + n10]
 
+        # choose a representative run for each extreme to keep GIFs small
+        idx_high_run = int(idx_high[-1]) if len(idx_high) > 0 else None
+        idx_low_run = int(idx_low[0]) if len(idx_low) > 0 else None
+        idx_mid_run = int(idx_mid[len(idx_mid)//2]) if len(idx_mid) > 0 else None
+
         def make_labels(indices):
             return [
                 f"run {i} (h={h_list[i]:.1f} nm) "
@@ -1987,31 +1992,34 @@ def run_scatter_mode(
                 for i in indices
             ]
 
-        # GIFs for each group
-        create_heatmap_gif_for_seeds(
-            Nx,
-            Ny,
-            segments,
-            [seed_list[i] for i in idx_high],
-            'O_phase_max.gif',
-            make_labels(idx_high),
-        )
-        create_heatmap_gif_for_seeds(
-            Nx,
-            Ny,
-            segments,
-            [seed_list[i] for i in idx_mid],
-            'O_phase_mid.gif',
-            make_labels(idx_mid),
-        )
-        create_heatmap_gif_for_seeds(
-            Nx,
-            Ny,
-            segments,
-            [seed_list[i] for i in idx_low],
-            'O_phase_min.gif',
-            make_labels(idx_low),
-        )
+        # GIFs: only one representative run for each extreme to reduce file size
+        if idx_high_run is not None:
+            create_heatmap_gif_for_seeds(
+                Nx,
+                Ny,
+                segments,
+                [seed_list[idx_high_run]],
+                'O_phase_max.gif',
+                make_labels([idx_high_run]),
+            )
+        if idx_mid_run is not None:
+            create_heatmap_gif_for_seeds(
+                Nx,
+                Ny,
+                segments,
+                [seed_list[idx_mid_run]],
+                'O_phase_mid.gif',
+                make_labels([idx_mid_run]),
+            )
+        if idx_low_run is not None:
+            create_heatmap_gif_for_seeds(
+                Nx,
+                Ny,
+                segments,
+                [seed_list[idx_low_run]],
+                'O_phase_min.gif',
+                make_labels([idx_low_run]),
+            )
 
         # Combined PDF for the same groups
         create_heatmap_pdf_for_seeds(
