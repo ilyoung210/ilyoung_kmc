@@ -1918,6 +1918,25 @@ def run_scatter_mode(
         fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
         plt.close(fig)
 
+    def save_grain_hist_percent(data, fname, title):
+        fig, ax = plt.subplots(figsize=PDF_FIG_SIZE)
+        if data:
+            counts, _ = np.histogram(data, bins=bins_r)
+            width = np.diff(bins_r)
+            left = bins_r[:-1]
+            pct = counts / float(len(data)) * 100.0
+            ax.bar(left, pct, width=width, color='gray', edgecolor='k', align='edge')
+            mean_val = np.mean(data)
+            ax.axvline(mean_val, color='r', linestyle='--', label=f"Mean={mean_val:.2f}Å")
+            ax.set_xlim(0, max_r * 1.05)
+            ax.legend(fontsize=PDF_LEGEND_FONT_SIZE)
+        ax.set_xlabel('Radius(Å)', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.set_ylabel('Fraction (%)', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.tick_params(axis='both', labelsize=PDF_TICK_FONT_SIZE)
+        ax.set_title(title + ' (%)', fontsize=PDF_LABEL_FONT_SIZE)
+        fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
+        plt.close(fig)
+
     def save_grain_hist_stack(O_data, M_data, T_data, fname, title):
         fig, ax = plt.subplots(figsize=PDF_FIG_SIZE)
         if O_data or M_data or T_data:
@@ -1943,9 +1962,42 @@ def run_scatter_mode(
         fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
         plt.close(fig)
 
+    def save_grain_hist_stack_percent(O_data, M_data, T_data, fname, title):
+        fig, ax = plt.subplots(figsize=PDF_FIG_SIZE)
+        total = len(O_data) + len(M_data) + len(T_data)
+        if total > 0:
+            counts_O, _ = np.histogram(O_data, bins=bins_r)
+            counts_M, _ = np.histogram(M_data, bins=bins_r)
+            counts_T, _ = np.histogram(T_data, bins=bins_r)
+            width = np.diff(bins_r)
+            left = bins_r[:-1]
+            pct_O = counts_O / float(total) * 100.0
+            pct_M = counts_M / float(total) * 100.0
+            pct_T = counts_T / float(total) * 100.0
+            ax.bar(left, pct_O, width=width, color=COLOR_UP, align='edge', label='O')
+            ax.bar(left, pct_M, width=width, bottom=pct_O, color=COLOR_MONO, align='edge', label='M')
+            bottom_TM = pct_O + pct_M
+            ax.bar(left, pct_T, width=width, bottom=bottom_TM, color=COLOR_TETRA, align='edge', label='T')
+            total_pct = pct_O + pct_M + pct_T
+            if total_pct.any():
+                mean_all = np.average(left + width/2, weights=total_pct)
+                ax.axvline(mean_all, color='r', linestyle='--', label=f"Mean={mean_all:.2f}Å")
+            ax.set_xlim(0, max_r * 1.05)
+            ax.legend(fontsize=PDF_LEGEND_FONT_SIZE)
+        ax.set_xlabel('Radius(Å)', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.set_ylabel('Fraction (%)', fontsize=PDF_LABEL_FONT_SIZE)
+        ax.tick_params(axis='both', labelsize=PDF_TICK_FONT_SIZE)
+        ax.set_title(title + ' (%)', fontsize=PDF_LABEL_FONT_SIZE)
+        fig.savefig(os.path.join('grain', fname), bbox_inches='tight')
+        plt.close(fig)
+
     save_grain_hist(grain_O, 'O_grain_histogram.pdf', 'O Phase Grain Size')
     save_grain_hist(grain_T, 'T_grain_histogram.pdf', 'T Phase Grain Size')
     save_grain_hist(grain_M, 'M_grain_histogram.pdf', 'M Phase Grain Size')
+    save_grain_hist_percent(grain_O, "O_grain_histogram_percent.pdf", "O Phase Grain Size")
+    save_grain_hist_percent(grain_T, "T_grain_histogram_percent.pdf", "T Phase Grain Size")
+    save_grain_hist_percent(grain_M, "M_grain_histogram_percent.pdf", "M Phase Grain Size")
+    save_grain_hist_stack_percent(grain_O, grain_M, grain_T, "All_grain_histogram_percent.pdf", "All Phases Grain Size")
     save_grain_hist_stack(grain_O, grain_M, grain_T,
                           'All_grain_histogram.pdf',
                           'All Phases Grain Size')
@@ -1980,11 +2032,6 @@ def run_scatter_mode(
         mid_start = max(0, n // 2 - n10 // 2)
         idx_mid = order[mid_start:mid_start + n10]
 
-        # choose a representative run for each extreme to keep GIFs small
-        idx_high_run = int(idx_high[-1]) if len(idx_high) > 0 else None
-        idx_low_run = int(idx_low[0]) if len(idx_low) > 0 else None
-        idx_mid_run = int(idx_mid[len(idx_mid)//2]) if len(idx_mid) > 0 else None
-
         def make_labels(indices):
             return [
                 f"run {i} (h={h_list[i]:.1f} nm) "
@@ -1992,33 +2039,41 @@ def run_scatter_mode(
                 for i in indices
             ]
 
-        # GIFs: only one representative run for each extreme to reduce file size
-        if idx_high_run is not None:
+        max_gif = 5
+        seeds_high = [seed_list[i] for i in idx_high[:max_gif]]
+        seeds_mid = [seed_list[i] for i in idx_mid[:max_gif]]
+        seeds_low = [seed_list[i] for i in idx_low[:max_gif]]
+
+        labels_high = make_labels(idx_high[:max_gif])
+        labels_mid = make_labels(idx_mid[:max_gif])
+        labels_low = make_labels(idx_low[:max_gif])
+
+        if seeds_high:
             create_heatmap_gif_for_seeds(
                 Nx,
                 Ny,
                 segments,
-                [seed_list[idx_high_run]],
+                seeds_high,
                 'O_phase_max.gif',
-                make_labels([idx_high_run]),
+                labels_high,
             )
-        if idx_mid_run is not None:
+        if seeds_mid:
             create_heatmap_gif_for_seeds(
                 Nx,
                 Ny,
                 segments,
-                [seed_list[idx_mid_run]],
+                seeds_mid,
                 'O_phase_mid.gif',
-                make_labels([idx_mid_run]),
+                labels_mid,
             )
-        if idx_low_run is not None:
+        if seeds_low:
             create_heatmap_gif_for_seeds(
                 Nx,
                 Ny,
                 segments,
-                [seed_list[idx_low_run]],
+                seeds_low,
                 'O_phase_min.gif',
-                make_labels([idx_low_run]),
+                labels_low,
             )
 
         # Combined PDF for the same groups
